@@ -28,6 +28,25 @@ def get_products():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@product_bp.route('/products/last-updated', methods=['GET'])
+def get_products_last_updated():
+    """Get the timestamp of the last product list update"""
+    try:
+        # Get the most recent product update time
+        latest_product = Product.query.order_by(Product.updated_at.desc()).first()
+        if latest_product:
+            last_updated = latest_product.updated_at.isoformat()
+        else:
+            last_updated = None
+        
+        return jsonify({
+            'success': True,
+            'last_updated': last_updated,
+            'total_products': Product.query.count()
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @product_bp.route('/products/<int:product_id>', methods=['GET'])
 def get_product(product_id):
     """الحصول على منتج محدد"""
@@ -265,4 +284,3 @@ def get_product_statistics():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-

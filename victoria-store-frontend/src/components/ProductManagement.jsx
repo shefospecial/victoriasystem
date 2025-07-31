@@ -29,6 +29,15 @@ const ProductManagement = () => {
     fetchCategories()
   }, [])
 
+  // NEW: Function to notify other components about product list changes
+  const notifyProductListUpdate = () => {
+    // Trigger storage event for cross-tab communication
+    localStorage.setItem('productListUpdated', Date.now().toString())
+    
+    // Trigger custom event for same-tab communication
+    window.dispatchEvent(new CustomEvent('productListUpdated'))
+  }
+
   // جلب المنتجات
   const fetchProducts = async () => {
     try {
@@ -93,6 +102,9 @@ const ProductManagement = () => {
         fetchProducts()
         resetForm()
         setShowAddForm(false)
+        
+        // NEW: Notify other components about the product list update
+        notifyProductListUpdate()
       } else {
         alert(data.error || 'حدث خطأ أثناء إضافة المنتج')
       }
@@ -138,6 +150,9 @@ const ProductManagement = () => {
         resetForm()
         setShowEditForm(false)
         setSelectedProduct(null)
+        
+        // NEW: Notify other components about the product list update
+        notifyProductListUpdate()
       } else {
         alert(data.error || 'حدث خطأ أثناء تحديث المنتج')
       }
@@ -164,6 +179,9 @@ const ProductManagement = () => {
       if (data.success) {
         alert('تم حذف المنتج بنجاح')
         fetchProducts()
+        
+        // NEW: Notify other components about the product list update
+        notifyProductListUpdate()
       } else {
         alert(data.error || 'حدث خطأ أثناء حذف المنتج')
       }
@@ -303,13 +321,16 @@ const ProductManagement = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   الفئة
                 </label>
-                <input
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  placeholder="أدخل فئة المنتج"
+                <select
+                  value={formData.category_id}
+                  onChange={(e) => setFormData({...formData, category_id: e.target.value})}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
+                >
+                  <option value="">اختر الفئة</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
               </div>
               
               <div>
@@ -459,13 +480,16 @@ const ProductManagement = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   الفئة
                 </label>
-                <input
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  placeholder="أدخل فئة المنتج"
+                <select
+                  value={formData.category_id}
+                  onChange={(e) => setFormData({...formData, category_id: e.target.value})}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
+                >
+                  <option value="">اختر الفئة</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
               </div>
               
               <div>
@@ -557,7 +581,7 @@ const ProductManagement = () => {
                 disabled={loading}
                 className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {loading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+                {loading ? 'جاري التحديث...' : 'تحديث'}
               </button>
               <button
                 type="button"
@@ -579,58 +603,60 @@ const ProductManagement = () => {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
         <div className="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-            قائمة المنتجات ({filteredProducts.length})
+            قائمة المنتجات ({filteredProducts.length} منتج)
           </h2>
         </div>
         
-        {loading ? (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            جاري التحميل...
-          </div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            لا توجد منتجات
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-100 dark:bg-gray-700">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-100 dark:bg-gray-700">
+              <tr>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-700 dark:text-gray-300">اسم المنتج</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الباركود</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الفئة</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">سعر الشراء</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">سعر البيع</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الكمية</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الحالة</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
+              {filteredProducts.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-gray-700 dark:text-gray-300">الاسم</th>
-                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الباركود</th>
-                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الفئة</th>
-                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">سعر البيع</th>
-                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الكمية</th>
-                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">الحالة</th>
-                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">إجراءات</th>
+                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    {loading ? 'جاري تحميل المنتجات...' : 'لا توجد منتجات'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
-                {filteredProducts.map(product => (
+              ) : (
+                filteredProducts.map(product => (
                   <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-4 py-3 text-gray-800 dark:text-white font-medium">
                       {product.name}
                     </td>
-                    <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400 font-mono">
-                      {product.barcode}
+                    <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
+                      {product.barcode || '-'}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
-                      {product.category || '-'}
+                      {getCategoryName(product.category_id)}
                     </td>
-                    <td className="px-4 py-3 text-center font-medium text-green-600 dark:text-green-400">
+                    <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
+                      {product.purchase_price ? `${product.purchase_price} جنيه` : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
                       {product.selling_price} جنيه
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`font-medium ${
-                        product.quantity <= (product.min_quantity || 0)
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-gray-800 dark:text-white'
+                      <span className={`px-2 py-1 rounded-full text-sm ${
+                        product.quantity < (product.min_quantity || 3)
+                          ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                          : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                       }`}>
                         {product.quantity}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`px-2 py-1 rounded text-sm ${
+                      <span className={`px-2 py-1 rounded-full text-sm ${
                         product.is_active !== false
                           ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                           : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
@@ -655,11 +681,11 @@ const ProductManagement = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

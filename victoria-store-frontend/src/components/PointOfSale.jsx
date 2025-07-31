@@ -18,7 +18,12 @@ function PointOfSale() {
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [showReceipt, setShowReceipt] = useState(false)
   const [currentInvoice, setCurrentInvoice] = useState(null)
+  const [lastProductUpdate, setLastProductUpdate] = useState(null)
+  const [productCount, setProductCount] = useState(0)
+  const [showRefreshHint, setShowRefreshHint] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState(Date.now())
   const searchInputRef = useRef(null)
+  const receiptRef = useRef(null)
 
   const searchCustomers = async (query) => {
     if (query.trim() === "") {
@@ -42,6 +47,68 @@ function PointOfSale() {
 
   useEffect(() => {
     fetchProducts()
+  }, [])
+
+  // NEW: Check for product updates using backend polling
+  useEffect(() => {
+    const checkForUpdates = async () => {
+      try {
+        const response = await fetch(buildApiUrl('/products/last-updated'))
+        const data = await response.json()
+        
+        if (data.success) {
+          // Check if this is the first load
+          if (lastProductUpdate === null) {
+            setLastProductUpdate(data.last_updated)
+            setProductCount(data.total_products)
+          } else {
+            // Check if products have been updated
+            if (data.last_updated !== lastProductUpdate || data.total_products !== productCount) {
+              console.log('Product list updated, refreshing...')
+              fetchProducts()
+              setLastProductUpdate(data.last_updated)
+              setProductCount(data.total_products)
+              setShowRefreshHint(false)
+              setLastRefresh(Date.now())
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking for product updates:', error)
+      }
+    }
+
+    // Initial check
+    checkForUpdates()
+    
+    // Set up periodic checking every 3 seconds
+    const interval = setInterval(checkForUpdates, 3000)
+    
+    return () => clearInterval(interval)
+  }, [lastProductUpdate, productCount])
+
+  // NEW: Show refresh hint after 30 seconds of no updates
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowRefreshHint(true)
+    }, 30000)
+    
+    return () => clearTimeout(timer)
+  }, [lastRefresh])
+
+  // NEW: Refresh on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchProducts()
+      setLastRefresh(Date.now())
+      setShowRefreshHint(false)
+    }
+
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [])
 
   useEffect(() => {
@@ -126,9 +193,17 @@ function PointOfSale() {
       const response = await fetch(buildApiUrl('/products'))
       const data = await response.json()
       setProducts(data.products || [])
+      console.log(`Loaded ${data.products?.length || 0} products`)
     } catch (error) {
       console.error('خطأ في جلب المنتجات:', error)
     }
+  }
+
+  // NEW: Manual refresh function
+  const handleManualRefresh = () => {
+    fetchProducts()
+    setLastRefresh(Date.now())
+    setShowRefreshHint(false)
   }
 
   const clearCart = () => {
@@ -141,71 +216,75 @@ function PointOfSale() {
   }
 
   const processPayment = async () => {
-    if (cartItems.length === 0) {
-      alert('العربة فارغة')
-      return
-    }
-
-    setLoading(true)
-    try {
-      const invoice = {
-        customer_id: selectedCustomer?.id || null,
-        items: cartItems.map(item => ({
-          product_id: item.id,
-          quantity: item.quantity,
-          selling_price: item.selling_price
-        })),
-        total: total,
-        date: new Date().toISOString()
-      }
-
-      const response = await fetch(buildApiUrl('/invoices'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(invoice)
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        // إنشاء بيانات الفاتورة للطباعة
-        const invoiceData = {
-          invoice_number: data.invoice.id,
-          created_at: new Date().toISOString(),
-          total_amount: total,
-          items: cartItems.map(item => ({
-            product_name: item.name,
-            quantity: item.quantity,
-            unit_price: item.selling_price
-          }))
-        }
-        
-        // حفظ بيانات الفاتورة وإظهار الفاتورة
-        setCurrentInvoice(invoiceData)
-        setShowReceipt(true)
-        
-        // طباعة تلقائية بعد ثانية واحدة
-        setTimeout(() => {
-          window.print()
-        }, 1000)
-        
-        alert(`تم إنشاء الفاتورة بنجاح! رقم الفاتورة: ${data.invoice.id}`)
-        clearCart()
-      } else {
-        console.log('Invoice API response:', data)
-      }
-    } catch (error) {
-      console.error('خطأ في معالجة الدفع:', error)
-      alert('خطأ في معالجة الدفع')
-    } finally {
-      setLoading(false)
-    }
+  if (cartItems.length === 0) {
+    alert('العربة فارغة')
+    return
   }
 
-  // باقي الكود كما هو بدون تعديل
-  // فقط أضفنا تحميل وتخزين cartItems في localStorage
+  setLoading(true)
+  try {
+    const invoice = {
+      customer_id: selectedCustomer?.id || null,
+      items: cartItems.map(item => ({
+        product_id: item.id,
+        quantity: item.quantity,
+        selling_price: item.selling_price
+      })),
+      total: total,
+      date: new Date().toISOString()
+    }
+
+    const response = await fetch(buildApiUrl('/invoices'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(invoice)
+    })
+
+    const data = await response.json()
+
+    if (data.success) {
+      // إنشاء بيانات الفاتورة للطباعة
+      const invoiceData = {
+        invoice_number: data.invoice.id,
+        created_at: new Date().toISOString(),
+        total_amount: total,
+        customerName: selectedCustomer?.name || null,
+        items: cartItems.map(item => ({
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: item.selling_price
+        }))
+      }
+      
+      // حفظ بيانات الفاتورة وإظهار الفاتورة
+      setCurrentInvoice(invoiceData)
+      setShowReceipt(true)
+      
+      // FIXED: Ask user if they want to print, then call print function
+      setTimeout(() => {
+        const shouldPrint = confirm('هل تريد طباعة الفاتورة؟');
+        if (shouldPrint && receiptRef.current) {
+          receiptRef.current.handlePrint();
+        }
+      }, 500)  // Reduced timeout from 1000ms to 500ms
+      
+      alert(`تم إنشاء الفاتورة بنجاح! رقم الفاتورة: ${data.invoice.id}`)
+      clearCart()
+    } else {
+      console.log('Invoice API response:', data)
+      alert('فشل في إنشاء الفاتورة')
+    }
+  } catch (error) {
+    console.error('خطأ في معالجة الدفع:', error)
+    alert('خطأ في معالجة الدفع')
+  } finally {
+    setLoading(false)
+  }
+}
+
+
 	const handleSearchInputChange = (e) => {
   const value = e.target.value
   setSearchInput(value)
@@ -291,9 +370,27 @@ const removeFromCart = (productId) => {
         {/* قسم البحث والإدخال */}
         <div className="lg:col-span-2">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-              البحث عن المنتجات
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+                البحث عن المنتجات
+              </h2>
+              <div className="flex items-center space-x-2">
+                {/* NEW: Refresh hint */}
+                {showRefreshHint && (
+                  <span className="text-sm text-orange-600 dark:text-orange-400">
+                    قد تحتاج لتحديث القائمة
+                  </span>
+                )}
+                {/* NEW: Manual refresh button */}
+                <button
+                  onClick={handleManualRefresh}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm"
+                  title="تحديث قائمة المنتجات"
+                >
+                  تحديث المنتجات
+                </button>
+              </div>
+            </div>
             
             <div className="relative">
               <input
@@ -321,12 +418,17 @@ const removeFromCart = (productId) => {
   >
     <div className="font-medium text-gray-800 dark:text-white">{product.name}</div>
     <div className="text-sm text-gray-600 dark:text-gray-400">
-      السعر: {product.price} جنيه - المخزون: {product.stock}
+      السعر: {product.selling_price} جنيه - المخزون: {product.quantity}
     </div>
   </div>
 ))}
                 </div>
               )}
+            </div>
+            
+            {/* NEW: Product count indicator */}
+            <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              إجمالي المنتجات: {products.length}
             </div>
           </div>
 
@@ -455,13 +557,17 @@ const removeFromCart = (productId) => {
                           setCustomerSearch('')
                           setCustomers([])
                         }}
-                        className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0"
+                        className="p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-600 last:border-b-0"
                       >
-                        <div className="font-medium text-gray-800 dark:text-white">{customer.name}</div>
+                        <div className="font-medium text-gray-800 dark:text-white">
+                          {customer.name}
+                        </div>
                         {customer.phone && (
-                          <div className="text-sm text-gray-600 dark:text-gray-400">{customer.phone}</div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            {customer.phone}
+                          </div>
                         )}
-                        <div className="text-sm text-blue-600 dark:text-blue-400">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
                           النقاط: {customer.loyalty_points || 0}
                         </div>
                       </div>
@@ -471,7 +577,7 @@ const removeFromCart = (productId) => {
                 
                 <button
                   onClick={() => setShowCustomerForm(true)}
-                  className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600"
+                  className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600"
                 >
                   إضافة عميل جديد
                 </button>
@@ -485,14 +591,16 @@ const removeFromCart = (productId) => {
               <h3 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">
                 إضافة عميل جديد
               </h3>
+              
               <div className="space-y-3">
                 <input
                   type="text"
                   value={newCustomer.name}
                   onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
-                  placeholder="اسم العميل *"
+                  placeholder="اسم العميل"
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
+                
                 <input
                   type="text"
                   value={newCustomer.phone}
@@ -500,10 +608,11 @@ const removeFromCart = (productId) => {
                   placeholder="رقم الهاتف"
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
-                <div className="flex space-x-3">
+                
+                <div className="flex space-x-2">
                   <button
                     onClick={createCustomer}
-                    className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600"
+                    className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600"
                   >
                     حفظ
                   </button>
@@ -512,7 +621,7 @@ const removeFromCart = (productId) => {
                       setShowCustomerForm(false)
                       setNewCustomer({ name: '', phone: '' })
                     }}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+                    className="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600"
                   >
                     إلغاء
                   </button>
@@ -541,32 +650,26 @@ const removeFromCart = (productId) => {
               </div>
               
               <div className="border-t border-gray-200 dark:border-gray-600 pt-3">
-                <div className="flex justify-between text-2xl font-bold">
+                <div className="flex justify-between text-xl font-bold">
                   <span className="text-gray-800 dark:text-white">الإجمالي:</span>
                   <span className="text-green-600 dark:text-green-400">{total.toFixed(2)} جنيه</span>
                 </div>
               </div>
-              
-              {selectedCustomer && (
-                <div className="text-sm text-blue-600 dark:text-blue-400">
-                  نقاط الولاء المكتسبة: {Math.floor(total / 10)}
-                </div>
-              )}
             </div>
             
             <div className="mt-6 space-y-3">
               <button
                 onClick={processPayment}
                 disabled={cartItems.length === 0 || loading}
-                className="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
+                className="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
               >
-                {loading ? 'جاري المعالجة...' : 'إتمام البيع'}
+                {loading ? 'جاري المعالجة...' : 'إتمام الدفع'}
               </button>
               
               <button
                 onClick={clearCart}
                 disabled={cartItems.length === 0}
-                className="w-full bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 مسح العربة
               </button>
@@ -575,36 +678,25 @@ const removeFromCart = (productId) => {
         </div>
       </div>
 
-      {/* مكون الفاتورة للطباعة */}
+      {/* عرض الفاتورة */}
       {showReceipt && currentInvoice && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">فاتورة البيع</h3>
-              <button
-                onClick={() => setShowReceipt(false)}
-                className="text-gray-500 hover:text-gray-700 text-xl"
-              >
-                ×
-              </button>
-            </div>
-            
-            <Receipt 
-              invoiceData={currentInvoice}
-              storePhoneNumber="01234567890"
-              storeLogo={null}
-            />
-            
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <Receipt ref={receiptRef} invoiceData={currentInvoice} />
             <div className="mt-4 flex space-x-2">
               <button
-                onClick={() => window.print()}
-                className="flex-1 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+                onClick={() => {
+                  if (receiptRef.current) {
+                    receiptRef.current.handlePrint();
+                  }
+                }}
+                className="flex-1 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
               >
-                طباعة مرة أخرى
+                طباعة
               </button>
               <button
                 onClick={() => setShowReceipt(false)}
-                className="flex-1 bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600"
+                className="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600"
               >
                 إغلاق
               </button>
