@@ -1,0 +1,116 @@
+/* Receipt Print Styles for Thermal Printers - Simplified Version */
+
+/* Screen preview styles */
+@media screen {
+  .receipt-container {
+    width: 58mm;
+    font-family: 'Courier New', monospace;
+    font-size: 8px;
+    line-height: 1.1;
+    padding: 2mm;
+    color: #000;
+    background-color: #fff;
+    margin: 0 auto;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-radius: 2px;
+  }
+}
+
+/* Print styles - Simplified approach */
+@media print {
+  /* Reset everything */
+  * {
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Force color printing */
+  html {
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Body settings */
+  body {
+    font-family: 'Courier New', monospace !important;
+    font-size: 8px !important;
+    line-height: 1.1 !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    width: 58mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Hide everything except receipt */
+  body * {
+    display: none !important;
+  }
+  
+  /* Show only receipt container and its children */
+  .receipt-container,
+  .receipt-container * {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #000000 !important;
+    background: transparent !important;
+    border-color: #000000 !important;
+  }
+  
+  /* Receipt container specific settings */
+  .receipt-container {
+    width: 58mm !important;
+    max-width: 58mm !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 8px !important;
+    line-height: 1.1 !important;
+    padding: 2mm !important;
+    margin: 0 !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Inline elements */
+  .receipt-container span {
+    display: inline !important;
+  }
+  
+  /* Flex elements */
+  .receipt-container div[style*="display: flex"],
+  .receipt-container div[style*="display:flex"] {
+    display: flex !important;
+  }
+  
+  /* Text elements */
+  .receipt-container h1,
+  .receipt-container h2,
+  .receipt-container h3,
+  .receipt-container p,
+  .receipt-container span,
+  .receipt-container div {
+    color: #000000 !important;
+    background: none !important;
+    text-shadow: none !important;
+  }
+  
+  /* Borders */
+  .receipt-container [style*="border-top"],
+  .receipt-container [style*="border-bottom"] {
+    border-color: #000000 !important;
+  }
+  
+  /* Page settings */
+  @page {
+    size: 58mm auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+

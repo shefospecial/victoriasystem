@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار الفاتورة - طريقة مبسطة</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .receipt-container {
+            width: 58mm;
+            font-family: 'Courier New', monospace;
+            font-size: 8px;
+            line-height: 1.1;
+            padding: 2mm;
+            color: #000;
+            background-color: #fff;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            border-radius: 2px;
+        }
+        
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .flex-row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin: 0.5mm 0; 
+        }
+        .dashed-border { 
+            border-top: 1px dashed #000; 
+            padding-top: 2mm; 
+            margin-bottom: 2mm; 
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center; color: #333;">اختبار الفاتورة - طريقة مبسطة</h1>
+        
+        <div class="receipt-container">
+            <div id="receipt-print-content">
+                <!-- Header -->
+                <div class="center" style="margin-bottom: 3mm;">
+                    <div class="bold" style="font-size: 10px;">فيكتوريا ستور</div>
+                    <div style="font-size: 7px; margin-top: 1mm;">01234567890</div>
+                </div>
+
+                <!-- Invoice Info -->
+                <div class="dashed-border">
+                    <div class="flex-row">
+                        <span>التاريخ:</span>
+                        <span id="invoiceDate"></span>
+                    </div>
+                    <div class="flex-row">
+                        <span>الوقت:</span>
+                        <span id="invoiceTime"></span>
+                    </div>
+                    <div class="flex-row">
+                        <span>رقم الفاتورة:</span>
+                        <span id="invoiceNumber"></span>
+                    </div>
+                </div>
+
+                <!-- Items Header -->
+                <div class="dashed-border">
+                    <div class="flex-row bold" style="margin-bottom: 1mm;">
+                        <span style="width: 60%; text-align: right;">المنتج</span>
+                        <span style="width: 15%; text-align: center;">الكمية</span>
+                        <span style="width: 25%; text-align: left;">السعر</span>
+                    </div>
+                    
+                    <!-- Items -->
+                    <div style="margin-bottom: 1mm;">
+                        <div class="flex-row">
+                            <span style="width: 60%; text-align: right; font-size: 7px;">شامبو هيد آند شولدرز</span>
+                            <span style="width: 15%; text-align: center;">2</span>
+                            <span style="width: 25%; text-align: left;">45.00</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1mm;">
+                        <div class="flex-row">
+                            <span style="width: 60%; text-align: right; font-size: 7px;">معجون أسنان كولجيت</span>
+                            <span style="width: 15%; text-align: center;">1</span>
+                            <span style="width: 25%; text-align: left;">25.50</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1mm;">
+                        <div class="flex-row">
+                            <span style="width: 60%; text-align: right; font-size: 7px;">صابون لوكس</span>
+                            <span style="width: 15%; text-align: center;">3</span>
+                            <span style="width: 25%; text-align: left;">12.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total -->
+                <div class="dashed-border">
+                    <div class="flex-row bold" style="font-size: 9px;">
+                        <span>الإجمالي:</span>
+                        <span>82.50 جنيه</span>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="dashed-border center">
+                    <div style="font-size: 7px;">شكراً لزيارتكم!</div>
+                    <div style="font-size: 6px; color: #666; margin-top: 1mm;">
+                        نتمنى لكم يوماً سعيداً
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="btn" onclick="printReceipt()">طباعة الفاتورة</button>
+            <button class="btn" onclick="printNormal()" style="background: #28a745;">طباعة عادية</button>
+        </div>
+    </div>
+
+    <script>
+        // تحديث بيانات الفاتورة
+        const now = new Date();
+        const invoiceNumber = 'INV-' + Math.floor(Math.random() * 10000);
+        
+        document.getElementById('invoiceDate').textContent = now.toLocaleDateString('ar-EG');
+        document.getElementById('invoiceTime').textContent = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('invoiceNumber').textContent = invoiceNumber;
+        
+        function printReceipt() {
+            // طريقة الطباعة البديلة
+            const receiptContent = document.getElementById('receipt-print-content');
+            if (!receiptContent) {
+                alert('لم يتم العثور على محتوى الفاتورة');
+                return;
+            }
+
+            const printWindow = window.open('', '_blank', 'width=300,height=600');
+            
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>فاتورة البيع</title>
+                    <style>
+                        body {
+                            font-family: 'Courier New', monospace;
+                            font-size: 8px;
+                            line-height: 1.1;
+                            color: black;
+                            background: white;
+                            margin: 0;
+                            padding: 2mm;
+                            width: 58mm;
+                        }
+                        
+                        .center { text-align: center; }
+                        .bold { font-weight: bold; }
+                        .flex-row { 
+                            display: flex; 
+                            justify-content: space-between; 
+                            margin: 0.5mm 0; 
+                        }
+                        .dashed-border { 
+                            border-top: 1px solid black; 
+                            padding-top: 2mm; 
+                            margin-bottom: 2mm; 
+                        }
+                        
+                        @media print {
+                            @page {
+                                size: 58mm auto;
+                                margin: 0;
+                            }
+                            body {
+                                -webkit-print-color-adjust: exact;
+                                print-color-adjust: exact;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${receiptContent.innerHTML}
+                </body>
+                </html>
+            `);
+            
+            printWindow.document.close();
+            printWindow.focus();
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
+        
+        function printNormal() {
+            // الطريقة العادية للطباعة
+            window.print();
+        }
+    </script>
+</body>
+</html>
+
