@@ -45,11 +45,15 @@ const ProductManagement = () => {
       const response = await fetch(buildApiUrl('/products'))
       const data = await response.json()
       
-      if (data.success) {
+      if (data.success && data.products) {
         setProducts(data.products)
+      } else {
+        console.error('خطأ في جلب المنتجات:', data.error)
+        setProducts([])
       }
     } catch (error) {
       console.error('خطأ في جلب المنتجات:', error)
+      setProducts([])
     } finally {
       setLoading(false)
     }
@@ -198,7 +202,7 @@ const ProductManagement = () => {
     setSelectedProduct(product)
     setFormData({
       name: product.name,
-      barcode: product.barcode,
+      barcode: product.barcode || '',
       category_id: product.category_id || '',
       purchase_price: product.purchase_price || '',
       selling_price: product.selling_price || '',
@@ -228,8 +232,11 @@ const ProductManagement = () => {
   // تصفية المنتجات
   const filteredProducts = products.filter(product => {
     const categoryName = product.category ? product.category.name : ''
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.barcode.includes(searchTerm) ||
+    const productBarcode = product.barcode || ''
+    
+    const matchesSearch = !searchTerm || 
+                         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         productBarcode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          categoryName.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesCategory = !categoryFilter || product.category_id?.toString() === categoryFilter
@@ -692,4 +699,3 @@ const ProductManagement = () => {
 }
 
 export default ProductManagement
-

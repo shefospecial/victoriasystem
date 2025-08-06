@@ -1,3 +1,4 @@
+
 import os
 import sys
 # DON'T CHANGE THIS !!!
@@ -50,7 +51,22 @@ app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(settings_bp, url_prefix='/api')  # إضافة routes الإعدادات
 
 # إعداد قاعدة البيانات
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+# Determine the base directory for the database
+if getattr(sys, 'frozen', False):
+    # Running in a PyInstaller bundle
+    # Use the directory where the executable is located
+    base_dir = os.path.dirname(sys.executable)
+else:
+    # Running in development mode
+    base_dir = os.path.dirname(__file__)
+
+# Create database directory if it doesn't exist
+database_dir = os.path.join(base_dir, 'database')
+if not os.path.exists(database_dir):
+    os.makedirs(database_dir)
+
+# Configure the database URI
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(database_dir, 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
@@ -232,4 +248,3 @@ if __name__ == '__main__':
         from src.routes.wastage import init_default_wastage_reasons
         init_default_wastage_reasons()
     app.run(host='0.0.0.0', port=5000, debug=True)
-

@@ -314,38 +314,42 @@ const Receipt = forwardRef(({ invoiceData, storePhoneNumber, storeLogo }, ref) =
 
       {/* Items Header */}
       <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        fontWeight: 'bold', 
-        borderBottom: '1px solid #000', 
-        padding: '3px 0', 
-        margin: '5px 0', 
-        fontSize: '10px' 
-      }}>
-        <span style={{ width: '50%', textAlign: 'right' }}>المنتج</span>
-        <span style={{ width: '20%', textAlign: 'center' }}>الكمية</span>
-        <span style={{ width: '30%', textAlign: 'left' }}>السعر</span>
-      </div>
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          fontWeight: 'bold', 
+          borderBottom: '1px solid #000', 
+          padding: '3px 0', 
+          margin: '5px 0', 
+          fontSize: '10px' 
+        }}>
+          <span style={{ width: '40%', textAlign: 'right' }}>المنتج</span>
+          <span style={{ width: '15%', textAlign: 'center' }}>الكمية</span>
+          <span style={{ width: '20%', textAlign: 'center' }}>سعر الوحدة</span>
+          <span style={{ width: '25%', textAlign: 'left' }}>الإجمالي</span>
+        </div>
       
       {/* Items */}
       {invoiceData.items.map((item, index) => (
-        <div key={index} style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          margin: '2px 0', 
-          fontSize: '9px' 
-        }}>
-          <span style={{ width: '50%', textAlign: 'right' }}>
-            {(item.product_name || item.name).length > 15 
-              ? (item.product_name || item.name).substring(0, 15) + '...' 
-              : (item.product_name || item.name)}
-          </span>
-          <span style={{ width: '20%', textAlign: 'center' }}>{item.quantity}</span>
-          <span style={{ width: '30%', textAlign: 'left' }}>
-            {((item.unit_price || item.selling_price || item.price) * item.quantity).toFixed(2)}
-          </span>
-        </div>
-      ))}
+          <div key={index} style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            margin: '2px 0', 
+            fontSize: '9px' 
+          }}>
+            <span style={{ width: '40%', textAlign: 'right' }}>
+              {(item.product_name || item.name).length > 15 
+                ? (item.product_name || item.name).substring(0, 15) + '...' 
+                : (item.product_name || item.name)}
+            </span>
+            <span style={{ width: '15%', textAlign: 'center' }}>{item.quantity}</span>
+            <span style={{ width: '20%', textAlign: 'center' }}>
+              {item.unit_price?.toFixed(2)} 
+            </span>
+            <span style={{ width: '25%', textAlign: 'left' }}>
+              {(item.unit_price * item.quantity).toFixed(2)}
+            </span>
+          </div>
+        ))}
 
       {/* Total */}
       <div style={{ 

@@ -49,7 +49,7 @@ function PointOfSale() {
     fetchProducts()
   }, [])
 
-  // NEW: Check for product updates using backend polling
+  // Check for product updates using backend polling
   useEffect(() => {
     const checkForUpdates = async () => {
       try {
@@ -57,12 +57,10 @@ function PointOfSale() {
         const data = await response.json()
         
         if (data.success) {
-          // Check if this is the first load
           if (lastProductUpdate === null) {
             setLastProductUpdate(data.last_updated)
             setProductCount(data.total_products)
           } else {
-            // Check if products have been updated
             if (data.last_updated !== lastProductUpdate || data.total_products !== productCount) {
               console.log('Product list updated, refreshing...')
               fetchProducts()
@@ -78,25 +76,20 @@ function PointOfSale() {
       }
     }
 
-    // Initial check
     checkForUpdates()
-    
-    // Set up periodic checking every 3 seconds
     const interval = setInterval(checkForUpdates, 3000)
-    
     return () => clearInterval(interval)
   }, [lastProductUpdate, productCount])
 
-  // NEW: Show refresh hint after 30 seconds of no updates
+  // Show refresh hint after 30 seconds of no updates
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowRefreshHint(true)
     }, 30000)
-    
     return () => clearTimeout(timer)
   }, [lastRefresh])
 
-  // NEW: Refresh on window focus
+  // Refresh on window focus
   useEffect(() => {
     const handleFocus = () => {
       fetchProducts()
@@ -105,7 +98,6 @@ function PointOfSale() {
     }
 
     window.addEventListener('focus', handleFocus)
-    
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
@@ -117,37 +109,36 @@ function PointOfSale() {
       setCartItems(JSON.parse(savedCart))
     }
   }, [])
-  
 
-	const createCustomer = async () => {
-  if (!newCustomer.name || !newCustomer.phone) {
-    alert('من فضلك املأ الاسم ورقم الهاتف');
-    return;
-  }
-
-  try {
-    const response = await fetch(buildApiUrl('/customers'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newCustomer)
-    });
-
-    const data = await response.json();
-
-    if (data.success) {
-      setCustomers(prev => [...prev, data.customer]);
-      setShowCustomerForm(false);
-      setNewCustomer({ name: '', phone: '' });
-      setSelectedCustomer(data.customer);
-      alert('تم حفظ العميل بنجاح');
-    } else {
-      alert(`فشل في حفظ العميل: ${data.message || 'خطأ غير معروف'}`);
+  const createCustomer = async () => {
+    if (!newCustomer.name || !newCustomer.phone) {
+      alert('من فضلك املأ الاسم ورقم الهاتف');
+      return;
     }
-  } catch (err) {
-    console.error('خطأ أثناء حفظ العميل:', err);
-    alert('حدث خطأ أثناء حفظ العميل');
+
+    try {
+      const response = await fetch(buildApiUrl('/customers'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCustomer)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setCustomers(prev => [...prev, data.customer]);
+        setShowCustomerForm(false);
+        setNewCustomer({ name: '', phone: '' });
+        setSelectedCustomer(data.customer);
+        alert('تم حفظ العميل بنجاح');
+      } else {
+        alert(`فشل في حفظ العميل: ${data.message || 'خطأ غير معروف'}`);
+      }
+    } catch (err) {
+      console.error('خطأ أثناء حفظ العميل:', err);
+      alert('حدث خطأ أثناء حفظ العميل');
+    }
   }
-}
 
   useEffect(() => {
     localStorage.setItem('cartItems', JSON.stringify(cartItems))
@@ -190,16 +181,34 @@ function PointOfSale() {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch(buildApiUrl('/products'))
-      const data = await response.json()
-      setProducts(data.products || [])
-      console.log(`Loaded ${data.products?.length || 0} products`)
+      console.log('Fetching products...')
+      
+      let response = await fetch(buildApiUrl('/products?per_page=1000'))
+      let data = await response.json()
+      
+      if (data.success) {
+        console.log(`Successfully loaded ${data.products?.length || 0} products from API`)
+        setProducts(data.products || [])
+        
+        if (data.total > data.products?.length) {
+          console.log(`Pagination detected. Total: ${data.total}, Retrieved: ${data.products?.length}`)
+          
+          response = await fetch(buildApiUrl('/products?per_page=0'))
+          data = await response.json()
+          
+          if (data.success && data.products?.length > 0) {
+            console.log(`Loaded all ${data.products.length} products without pagination`)
+            setProducts(data.products)
+          }
+        }
+      } else {
+        console.error('Failed to fetch products:', data.error)
+      }
     } catch (error) {
       console.error('خطأ في جلب المنتجات:', error)
     }
   }
 
-  // NEW: Manual refresh function
   const handleManualRefresh = () => {
     fetchProducts()
     setLastRefresh(Date.now())
@@ -215,151 +224,213 @@ function PointOfSale() {
     localStorage.removeItem('cartItems')
   }
 
-  const processPayment = async () => {
-  if (cartItems.length === 0) {
-    alert('العربة فارغة')
-    return
-  }
-
-  setLoading(true)
-  try {
-    const invoice = {
-      customer_id: selectedCustomer?.id || null,
-      items: cartItems.map(item => ({
-        product_id: item.id,
-        quantity: item.quantity,
-        selling_price: item.selling_price
-      })),
-      total: total,
-      date: new Date().toISOString()
+  // Modified processPayment function with print option
+  const processPayment = async (shouldPrint = true) => {
+    if (cartItems.length === 0) {
+      alert('العربة فارغة')
+      return
     }
 
-    const response = await fetch(buildApiUrl('/invoices'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(invoice)
-    })
-
-    const data = await response.json()
-
-    if (data.success) {
-      // إنشاء بيانات الفاتورة للطباعة
-      const invoiceData = {
-        invoice_number: data.invoice.id,
-        created_at: new Date().toISOString(),
-        total_amount: total,
-        customerName: selectedCustomer?.name || null,
+    setLoading(true)
+    try {
+      const invoice = {
+        customer_id: selectedCustomer?.id || null,
         items: cartItems.map(item => ({
-          product_name: item.name,
+          product_id: item.id,
           quantity: item.quantity,
           unit_price: item.selling_price
-        }))
+        })),
+        total: total,
+        date: new Date().toISOString(),
+        print_receipt: shouldPrint
+      }
+
+      console.log('Sending invoice data:', invoice)
+
+      const response = await fetch(buildApiUrl('/invoices'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(invoice)
+      })
+
+      console.log('Response status:', response.status)
+      console.log('Response headers:', response.headers.get('content-type'))
+      
+      const responseText = await response.text()
+      console.log('Response text:', responseText)
+
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error('Failed to parse JSON:', parseError)
+        throw new Error('الخادم أرجع استجابة غير صالحة')
       }
       
-      // حفظ بيانات الفاتورة وإظهار الفاتورة
-      setCurrentInvoice(invoiceData)
-      setShowReceipt(true)
-      
-      // FIXED: Ask user if they want to print, then call print function
-      setTimeout(() => {
-        const shouldPrint = confirm('هل تريد طباعة الفاتورة؟');
-        if (shouldPrint && receiptRef.current) {
-          receiptRef.current.handlePrint();
+      console.log('Parsed data:', data)
+
+      if (data.success) {
+        const invoiceData = {
+          invoice_number: data.invoice.invoice_number || data.invoice.id,
+          created_at: new Date().toISOString(),
+          total_amount: total,
+          customerName: selectedCustomer?.name || null,
+          items: cartItems.map(item => ({
+            product_name: item.name,
+            quantity: item.quantity,
+            unit_price: item.selling_price
+          }))
         }
-      }, 500)  // Reduced timeout from 1000ms to 500ms
-      
-      alert(`تم إنشاء الفاتورة بنجاح! رقم الفاتورة: ${data.invoice.id}`)
-      clearCart()
-    } else {
-      console.log('Invoice API response:', data)
-      alert('فشل في إنشاء الفاتورة')
+        
+        setCurrentInvoice(invoiceData)
+        
+        if (shouldPrint) {
+          setShowReceipt(true)
+          alert(`تم إنشاء الفاتورة وطباعتها بنجاح! رقم الفاتورة: ${invoiceData.invoice_number}`)
+        } else {
+          alert(`تم إنشاء الفاتورة بنجاح بدون طباعة! رقم الفاتورة: ${invoiceData.invoice_number}`)
+        }
+        
+        clearCart()
+      } else {
+        console.error('Invoice API error:', data)
+        alert(`فشل في إنشاء الفاتورة: ${data.error || 'خطأ غير معروف'}`)
+      }
+    } catch (error) {
+      console.error('خطأ في معالجة الدفع:', error)
+      alert(`خطأ في معالجة الدفع: ${error.message}`)
+    } finally {
+      setLoading(false)
     }
-  } catch (error) {
-    console.error('خطأ في معالجة الدفع:', error)
-    alert('خطأ في معالجة الدفع')
-  } finally {
-    setLoading(false)
   }
-}
 
-
-	const handleSearchInputChange = (e) => {
-  const value = e.target.value
-  setSearchInput(value)
+  const handleSearchInputChange = (e) => {
+  const value = e.target.value;
+  setSearchInput(value);
 
   if (value.trim() === '') {
-    setShowSearchResults(false)
-	setSelectedIndex(-1)
-    setSearchResults([])
-    return
+    setShowSearchResults(false);
+    setSelectedIndex(-1);
+    setSearchResults([]);
+    return;
   }
 
   const results = products.filter(product =>
     product.name.toLowerCase().includes(value.toLowerCase()) ||
     (product.barcode && product.barcode.toLowerCase().includes(value.toLowerCase()))
-  )
+  );
 
-  setSearchResults(results)
-  setShowSearchResults(true)
-}
+  setSearchResults(results);
+  setShowSearchResults(true);
 
-const handleSearchKeyPress = (e) => {
-  if (e.key === 'Enter' && searchResults.length > 0) {
-    selectProductFromResults(searchResults[0])
+  // الكشف عن الباركود الفريد
+  if (value.length >= 8) { // يمكنك تغيير الرقم حسب الحد الأدنى لطول الباركود
+    const exactMatch = products.find(
+      p => p.barcode && p.barcode.toLowerCase() === value.toLowerCase()
+    );
+    
+    if (exactMatch) {
+      selectProductFromResults(exactMatch);
+    }
   }
-}
+};
 
-const selectProductFromResults = (product) => {
-  const existingItem = cartItems.find(item => item.id === product.id)
-  if (existingItem) {
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter' && searchResults.length > 0) {
+      selectProductFromResults(searchResults[0])
+    }
+  }
+
+  const selectProductFromResults = (product) => {
+    // إلغاء نتائج البحث لمنع الإضافة المزدوجة
+  setSearchInput('');
+  setSearchResults([]);
+  setShowSearchResults(false);
+  setSelectedIndex(-1);
+    const existingItem = cartItems.find(item => item.id === product.id)
+    if (existingItem) {
+      setCartItems(cartItems.map(item =>
+        item.id === product.id
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ))
+    } else {
+      setCartItems([...cartItems, { ...product, quantity: 1 }])
+    }
+
+    setSearchInput('')
+    setSearchResults([])
+    setShowSearchResults(false)
+    setSelectedIndex(-1)
+  }
+
+  const updatePrice = (productId, price) => {
+    if (isNaN(price) || price <= 0) return;
     setCartItems(cartItems.map(item =>
-      item.id === product.id
-        ? { ...item, quantity: item.quantity + 1 }
-        : item
+      item.id === productId ? { ...item, selling_price: price } : item
+    ));
+  };
+
+  const updateQuantity = (productId, quantity) => {
+    if (quantity <= 0) {
+      removeFromCart(productId)
+      return
+    }
+
+    setCartItems(cartItems.map(item =>
+      item.id === productId ? { ...item, quantity } : item
     ))
-  } else {
-    setCartItems([...cartItems, { ...product, quantity: 1 }])
   }
 
-  setSearchInput('')
-  setSearchResults([])
-  setShowSearchResults(false)
-  setSelectedIndex(-1)
-}
+  const handleSearchKeyDown = (e) => {
+    if (!showSearchResults || searchResults.length === 0) return
 
-const updateQuantity = (productId, quantity) => {
-  if (quantity <= 0) {
-    removeFromCart(productId)
-    return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      const newIndex = (selectedIndex + 1) % searchResults.length
+      setSelectedIndex(newIndex)
+
+      // Scroll to the selected item
+      setTimeout(() => {
+        const selectedElement = document.querySelector(`[data-search-index="${newIndex}"]`)
+        if (selectedElement) {
+          selectedElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'nearest' 
+          })
+        }
+      }, 0)
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      const newIndex = (selectedIndex - 1 + searchResults.length) % searchResults.length
+      setSelectedIndex(newIndex)
+
+      // Scroll to the selected item
+      setTimeout(() => {
+        const selectedElement = document.querySelector(`[data-search-index="${newIndex}"]`)
+        if (selectedElement) {
+          selectedElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'nearest' 
+          })
+        }
+      }, 0)
+    }
+
+    if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault()
+      selectProductFromResults(searchResults[selectedIndex])
+    }
   }
 
-  setCartItems(cartItems.map(item =>
-    item.id === productId ? { ...item, quantity } : item
-  ))
-}
-const handleSearchKeyDown = (e) => {
-  if (!showSearchResults || searchResults.length === 0) return
-
-  if (e.key === 'ArrowDown') {
-    e.preventDefault()
-    setSelectedIndex((prev) => (prev + 1) % searchResults.length)
+  const removeFromCart = (productId) => {
+    setCartItems(cartItems.filter(item => item.id !== productId))
   }
 
-  if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    setSelectedIndex((prev) => (prev - 1 + searchResults.length) % searchResults.length)
-  }
-
-  if (e.key === 'Enter' && selectedIndex >= 0) {
-    e.preventDefault()
-    selectProductFromResults(searchResults[selectedIndex])
-  }
-}
-const removeFromCart = (productId) => {
-  setCartItems(cartItems.filter(item => item.id !== productId))
-}
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-3xl font-bold text-center mb-8 text-gray-800 dark:text-white">
@@ -375,13 +446,11 @@ const removeFromCart = (productId) => {
                 البحث عن المنتجات
               </h2>
               <div className="flex items-center space-x-2">
-                {/* NEW: Refresh hint */}
                 {showRefreshHint && (
                   <span className="text-sm text-orange-600 dark:text-orange-400">
                     قد تحتاج لتحديث القائمة
                   </span>
                 )}
-                {/* NEW: Manual refresh button */}
                 <button
                   onClick={handleManualRefresh}
                   className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm"
@@ -399,7 +468,7 @@ const removeFromCart = (productId) => {
                 value={searchInput}
                 onChange={handleSearchInputChange}
                 onKeyPress={handleSearchKeyPress}
-				onKeyDown={handleSearchKeyDown}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="امسح الباركود أو ابحث عن منتج بالاسم..."
                 className="w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 autoComplete="off"
@@ -409,24 +478,24 @@ const removeFromCart = (productId) => {
               {showSearchResults && searchResults.length > 0 && (
                 <div className="absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg mt-1 shadow-lg z-10 max-h-60 overflow-y-auto">
                   {searchResults.map((product, index) => (
-  <div
-    key={product.id}
-    onClick={() => selectProductFromResults(product)}
-    className={`p-3 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 
-      ${index === selectedIndex ? 'bg-blue-100 dark:bg-blue-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}
-    `}
-  >
-    <div className="font-medium text-gray-800 dark:text-white">{product.name}</div>
-    <div className="text-sm text-gray-600 dark:text-gray-400">
-      السعر: {product.selling_price} جنيه - المخزون: {product.quantity}
-    </div>
-  </div>
-))}
+                    <div
+                      key={product.id}
+                      data-search-index={index}  // إضافة هذا السطر
+                      onClick={() => selectProductFromResults(product)}
+                      className={`p-3 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 
+                        ${index === selectedIndex ? 'bg-blue-100 dark:bg-blue-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}
+                      `}
+                    >
+                      <div className="font-medium text-gray-800 dark:text-white">{product.name}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        السعر: {product.selling_price} جنيه - المخزون: {product.quantity}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
             
-            {/* NEW: Product count indicator */}
             <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               إجمالي المنتجات: {products.length}
             </div>
@@ -439,7 +508,7 @@ const removeFromCart = (productId) => {
                 عربة التسوق ({cartItems.length} منتج)
               </h2>
             </div>
-            
+                      
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-100 dark:bg-gray-700">
@@ -464,9 +533,17 @@ const removeFromCart = (productId) => {
                         <td className="px-4 py-3 text-gray-800 dark:text-white font-medium">
                           {item.name}
                         </td>
+                    
                         <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
-                          {item.selling_price} جنيه
+                          <input
+                            type="number"
+                            className="w-20 px-2 py-1 text-center rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                            value={item.selling_price}
+                            onChange={(e) => updatePrice(item.id, parseFloat(e.target.value))}
+                          />
+                          <span className="ml-1">جنيه</span>
                         </td>
+                    
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center space-x-2">
                             <button
@@ -486,6 +563,7 @@ const removeFromCart = (productId) => {
                             </button>
                           </div>
                         </td>
+                    
                         <td className="px-4 py-3 text-center font-medium text-gray-800 dark:text-white">
                           {(item.selling_price * item.quantity).toFixed(2)} جنيه
                         </td>
@@ -657,13 +735,22 @@ const removeFromCart = (productId) => {
               </div>
             </div>
             
+            {/* Modified payment buttons section */}
             <div className="mt-6 space-y-3">
               <button
-                onClick={processPayment}
+                onClick={() => processPayment(true)}
                 disabled={cartItems.length === 0 || loading}
                 className="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
               >
-                {loading ? 'جاري المعالجة...' : 'إتمام الدفع'}
+                {loading ? 'جاري المعالجة...' : 'إتمام الدفع مع الطباعة'}
+              </button>
+              
+              <button
+                onClick={() => processPayment(false)}
+                disabled={cartItems.length === 0 || loading}
+                className="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
+              >
+                {loading ? 'جاري المعالجة...' : 'إتمام الدفع بدون طباعة'}
               </button>
               
               <button

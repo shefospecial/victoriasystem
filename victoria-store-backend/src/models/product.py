@@ -29,7 +29,7 @@ class Product(db.Model):
             'selling_price': self.selling_price,
             'quantity': self.quantity,
             'serial_number': self.serial_number,
-            'barcode': self.serial_number,  # إضافة حقل barcode للتوافق مع الواجهة الأمامية
+            'barcode': self.serial_number or self.barcode or '',  # استخدم serial_number أو barcode
             'category_id': self.category_id,
             'category': self.category.to_dict() if self.category else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -56,13 +56,25 @@ class Product(db.Model):
 
     @classmethod
     def search(cls, query):
-        """البحث في المنتجات بالاسم أو السيريال"""
-        return cls.query.filter(
-            db.or_(
-                cls.name.contains(query),
-                cls.serial_number.contains(query)
-            )
-        ).all()
+        """البحث في المنتجات بالاسم أو السيريال - محسّن"""
+        if not query or not query.strip():
+            return cls.query.order_by(cls.name.asc()).all()
+
+        query = query.strip()
+
+        try:
+            # البحث في جميع الحقول ذات الصلة
+            return cls.query.filter(
+                db.or_(
+                    cls.name.ilike(f'%{query}%'),  # البحث بالاسم (غير حساس للحالة)
+                    cls.serial_number.ilike(f'%{query}%'),  # البحث بالسيريال
+                    cls.barcode.ilike(f'%{query}%') if cls.barcode else False,  # البحث بالباركود
+                    cls.id == int(query) if query.isdigit() else False  # البحث بالـ ID إذا كان رقم
+                )
+            ).order_by(cls.name.asc()).all()
+        except Exception as e:
+            print(f"خطأ في البحث: {e}")
+            return cls.query.order_by(cls.name.asc()).all()
 
     @classmethod
     def get_low_stock_products(cls, threshold=3):

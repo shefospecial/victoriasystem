@@ -4,7 +4,10 @@ from src.models.user import db
 from src.models.invoice import Invoice, InvoiceItem
 from src.models.product import Product
 from src.models.customer import Customer, LoyaltyTransaction
+from src.models.category import Category  # إضافة استيراد Category
 from src.services.telegram_service import telegram_service
+from src.services.print_service import print_service
+import logging
 
 invoice_bp = Blueprint('invoice', __name__)
 
@@ -67,9 +70,15 @@ def create_invoice():
     try:
         data = request.get_json()
         
+        if not data:
+            return jsonify({'success': False, 'error': 'لم يتم استلام بيانات'}), 400
+        
         # التحقق من وجود عناصر في الفاتورة
         if not data.get('items') or len(data['items']) == 0:
             return jsonify({'success': False, 'error': 'الفاتورة يجب أن تحتوي على عنصر واحد على الأقل'}), 400
+        
+        # Get print flag (default to True for backward compatibility)
+        should_print = data.get('print_receipt', True)
         
         # إنشاء الفاتورة
         invoice = Invoice(
@@ -82,6 +91,9 @@ def create_invoice():
         
         db.session.add(invoice)
         db.session.flush()  # للحصول على ID الفاتورة
+        
+        # قائمة الفئات المحدثة لتجنب التكرار
+        updated_categories = {}
         
         # إضافة عناصر الفاتورة
         for item_data in data['items']:
@@ -113,7 +125,26 @@ def create_invoice():
             # تحديث كمية المنتج
             product.update_quantity(-quantity)
             
+            # تحديث رصيد الفئة - إضافة الجزء المفقود
+            if product.category_id:
+                category = Category.query.get(product.category_id)
+                if category:
+                    # حساب صافي المبيعات للعنصر (بعد خصم الخصم)
+                    item_sales = invoice_item.total_price
+                    
+                    # تجميع المبيعات لكل فئة لتجنب التحديث المتكرر
+                    if category.id in updated_categories:
+                        updated_categories[category.id] += item_sales
+                    else:
+                        updated_categories[category.id] = item_sales
+            
             db.session.add(invoice_item)
+        
+        # تحديث رصيد الفئات
+        for category_id, sales_amount in updated_categories.items():
+            category = Category.query.get(category_id)
+            if category:
+                category.add_sale(sales_amount)
         
         # حساب إجماليات الفاتورة
         invoice.calculate_totals()
@@ -136,19 +167,32 @@ def create_invoice():
                     )
                     db.session.add(loyalty_transaction)
         
+        # حفظ البيانات في قاعدة البيانات
         db.session.commit()
         
+        # التعامل مع الطباعة
+        if should_print:
+            try:
+                success = print_service.print_invoice(invoice, invoice.items)
+                if not success:
+                    logging.warning("فشل في الطباعة")
+            except Exception as e:
+                logging.error(f"خطأ في الطباعة: {e}")
+        else:
+            logging.info("تم تخطي الطباعة حسب الطلب")
+            
         # إرسال إشعار تليجرام للفاتورة الجديدة
         try:
             invoice_data = invoice.to_dict()
             telegram_service.send_invoice_notification(invoice_data)
         except Exception as e:
-            print(f"خطأ في إرسال إشعار التليجرام: {e}")
+            logging.error(f"خطأ في إرسال إشعار التليجرام: {e}")
         
         response_data = {
             'success': True,
             'message': 'تم إنشاء الفاتورة بنجاح',
-            'invoice': invoice.to_dict()
+            'invoice': invoice.to_dict(),
+            'printed': should_print
         }
         
         if loyalty_points_earned > 0:
@@ -158,10 +202,11 @@ def create_invoice():
         
     except Exception as e:
         db.session.rollback()
+        logging.error(f"خطأ في إنشاء الفاتورة: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @invoice_bp.route('/invoices/<int:invoice_id>/return', methods=['POST'])
-def return_invoice():
+def return_invoice(invoice_id):
     """إرجاع فاتورة (مرتجع)"""
     try:
         invoice = Invoice.query.get_or_404(invoice_id)
@@ -172,12 +217,25 @@ def return_invoice():
         data = request.get_json()
         return_items = data.get('items', [])
         
+        # قائمة الفئات المحدثة لتجنب التكرار
+        updated_categories = {}
+        
         if not return_items:
             # إرجاع كامل
             for item in invoice.items:
                 product = Product.query.get(item.product_id)
                 if product:
                     product.update_quantity(item.quantity)
+                    
+                    # خصم المبيعات من رصيد الفئة في حالة الإرجاع الكامل
+                    if product.category_id:
+                        category = Category.query.get(product.category_id)
+                        if category:
+                            item_sales = item.total_price
+                            if category.id in updated_categories:
+                                updated_categories[category.id] -= item_sales
+                            else:
+                                updated_categories[category.id] = -item_sales
             
             invoice.status = 'returned'
         else:
@@ -216,8 +274,25 @@ def return_invoice():
                     product = Product.query.get(original_item.product_id)
                     if product:
                         product.update_quantity(return_quantity)
+                        
+                        # خصم المبيعات من رصيد الفئة في حالة الإرجاع الجزئي
+                        if product.category_id:
+                            category = Category.query.get(product.category_id)
+                            if category:
+                                # حساب المبلغ المرتجع بناءً على النسبة
+                                returned_amount = (return_quantity / original_item.quantity) * original_item.total_price
+                                if category.id in updated_categories:
+                                    updated_categories[category.id] -= returned_amount
+                                else:
+                                    updated_categories[category.id] = -returned_amount
                     
                     db.session.add(return_invoice_item)
+        
+        # تحديث رصيد الفئات
+        for category_id, sales_change in updated_categories.items():
+            category = Category.query.get(category_id)
+            if category:
+                category.add_sale(sales_change)  # سالب في حالة الإرجاع
         
         db.session.commit()
         
@@ -309,8 +384,6 @@ def get_daily_sales(date):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
-
 @invoice_bp.route('/invoices/statistics', methods=['GET'])
 def get_invoice_statistics():
     """الحصول على إحصائيات الفواتير"""
@@ -345,4 +418,3 @@ def get_invoice_statistics():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-

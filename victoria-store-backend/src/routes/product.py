@@ -9,43 +9,39 @@ product_bp = Blueprint('product', __name__)
 def get_products():
     """الحصول على جميع المنتجات مع إمكانية البحث"""
     try:
-        search_query = request.args.get('search', '')
+        search_query = request.args.get('search', '').strip()
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
+        per_page = request.args.get('per_page', 5000, type=int)
         
-        if search_query:
-            products = Product.search(search_query)
-        else:
-            products = Product.query.paginate(
+        # جلب جميع المنتجات بدون بحث للسماح للفرونت اند بالتحكم في البحث
+        query = Product.query.order_by(Product.created_at.desc())
+
+        # إذا كان هناك pagination، استخدمها
+        if per_page and per_page > 0:
+            paginated = query.paginate(
                 page=page, per_page=per_page, error_out=False
-            ).items
+            )
+            products = paginated.items
+            total = paginated.total
+        else:
+            # جلب جميع المنتجات بدون pagination
+            products = query.all()
+            total = len(products)
         
         return jsonify({
             'success': True,
             'products': [product.to_dict() for product in products],
-            'total': len(products)
+            'total': total,
+            'page': page,
+            'per_page': per_page
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@product_bp.route('/products/last-updated', methods=['GET'])
-def get_products_last_updated():
-    """Get the timestamp of the last product list update"""
-    try:
-        # Get the most recent product update time
-        latest_product = Product.query.order_by(Product.updated_at.desc()).first()
-        if latest_product:
-            last_updated = latest_product.updated_at.isoformat()
-        else:
-            last_updated = None
-        
         return jsonify({
-            'success': True,
-            'last_updated': last_updated,
-            'total_products': Product.query.count()
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+            'success': False, 
+            'error': str(e),
+            'products': [],
+            'total': 0
+        }), 500
 
 @product_bp.route('/products/<int:product_id>', methods=['GET'])
 def get_product(product_id):
@@ -75,10 +71,10 @@ def create_product():
         barcode_value = data.get('barcode') or data.get('serial_number')
         
         # التحقق من عدم تكرار الباركود
-        if barcode_value:
-            existing_product = Product.query.filter_by(serial_number=barcode_value).first()
-            if existing_product:
-                return jsonify({'success': False, 'error': 'الباركود موجود مسبقاً'}), 400
+        #if barcode_value:
+          #  existing_product = Product.query.filter_by(serial_number=barcode_value).first()
+          #  if existing_product:
+            #    return jsonify({'success': False, 'error': 'الباركود موجود مسبقاً'}), 400
         
         product = Product(
             name=data['name'],
