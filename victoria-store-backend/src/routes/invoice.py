@@ -418,3 +418,51 @@ def get_invoice_statistics():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@invoice_bp.route('/invoices/search', methods=['GET'])
+def search_invoices():
+    """البحث في الفواتير بناءً على رقم الفاتورة أو اسم العميل أو رقم الهاتف"""
+    try:
+        search_query = request.args.get('q', '').strip()
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        if not search_query:
+            return jsonify({
+                'success': True,
+                'invoices': [],
+                'total': 0,
+                'pages': 0,
+                'current_page': page
+            })
+        
+        # البحث في الفواتير
+        query = Invoice.query.join(Customer, Invoice.customer_id == Customer.id, isouter=True)
+        
+        # البحث في رقم الفاتورة أو اسم العميل أو رقم الهاتف
+        search_filter = db.or_(
+            Invoice.invoice_number.ilike(f'%{search_query}%'),
+            Customer.name.ilike(f'%{search_query}%'),
+            Customer.phone.ilike(f'%{search_query}%')
+        )
+        
+        query = query.filter(search_filter)
+        
+        # ترتيب حسب التاريخ (الأحدث أولاً)
+        query = query.order_by(Invoice.created_at.desc())
+        
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        invoices = pagination.items
+        
+        return jsonify({
+            'success': True,
+            'invoices': [invoice.to_dict() for invoice in invoices],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page,
+            'search_query': search_query
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+

@@ -134,3 +134,5 @@ class InvoiceItem(db.Model):
 # إضافة العلاقة بين InvoiceItem والProduct
 InvoiceItem.product = db.relationship('Product', backref='invoice_items', lazy=True)
 
+
+

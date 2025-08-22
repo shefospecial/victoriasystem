@@ -7,6 +7,7 @@ import TelegramSettings from './components/TelegramSettings'
 import AdminDashboard from './components/AdminDashboard'
 import ProductManagement from './components/ProductManagementNew'
 import CategoryManagement from './components/CategoryManagement'
+import InvoiceManagement from './components/InvoiceManagement'
 import LoginForm from './components/LoginForm'
 import './App.css'
 
@@ -146,6 +147,7 @@ function App() {
               <Button variant={activeTab === 'products' ? 'default' : 'outline'} onClick={() => setActiveTab('products')}>📦 المنتجات</Button>
               <Button variant={activeTab === 'categories' ? 'default' : 'outline'} onClick={() => setActiveTab('categories')}>🏷️ الفئات</Button>
               <Button variant={activeTab === 'sales' ? 'default' : 'outline'} onClick={() => setActiveTab('sales')}>🛒 نقطة البيع</Button>
+              <Button variant={activeTab === 'invoices' ? 'default' : 'outline'} onClick={() => setActiveTab('invoices')}>🧾 الفواتير</Button>
               <Button variant={activeTab === 'suppliers' ? 'default' : 'outline'} onClick={() => setActiveTab('suppliers')}>🏭 الموزعين</Button>
               {user?.role === 'admin' && (
                 <>
@@ -180,6 +182,7 @@ function App() {
 
             {activeTab === 'products' && <ProductManagement />}
             {activeTab === 'categories' && <CategoryManagement currentUser={user} />}
+            {activeTab === 'invoices' && <InvoiceManagement />}
 
             <div style={{ display: activeTab === 'sales' ? 'block' : 'none' }}>
   <PointOfSale />
